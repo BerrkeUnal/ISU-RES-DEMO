@@ -7,12 +7,11 @@ from views import auth, admin, user
 
 st.set_page_config(
     page_title="IsuRes - Reservation System",
-    page_icon="🏫",
+    page_icon="🫗",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- SIDEBAR ---  
 # --- SIDEBAR ---  
 def sidebar_menu():
     with st.sidebar:
@@ -35,8 +34,8 @@ def sidebar_menu():
             icons = ["building", "gear"]
         else:
             # STANDART MENÜ: Öğrenci ve Akademisyenler için hepsi açık.
-            menu_options = ["Classrooms", "Make Reservation", "Reservations", "Notifications"]
-            icons = ["building", "calendar-plus", "calendar-check", "bell"]
+            menu_options = ["Classrooms", "Reservations", "Notifications"]
+            icons = ["building", "calendar-check", "bell"]
         
         selected = option_menu(
             menu_title=None,
@@ -98,15 +97,8 @@ def main():
             user.classrooms_page()
             
         elif selected_page == "Reservations":
-            # Admin artık menüde bunu görmüyor ama kod güvenliği için burada kalsa da sorun olmaz.
+            # Admin artık menüde bunu görmüyor
             user.reservations_page()
-            
-        elif selected_page == "Make Reservation":
-            # Sadece Öğrenci ve Akademisyen erişebilir
-            if st.session_state.user_role in ["student", "academician"]:
-                user.make_reservation_page()
-            else:
-                st.error("Bu sayfaya erişim yetkiniz yok.")
             
         elif selected_page == "Notifications":
             user.notifications_page()

@@ -67,16 +67,13 @@ def login_page():
     col1, col2, col3 = st.columns([1, 1.2, 1])
     
     with col2:
-        # Başlıklar artık kartın içinde, logosuz
         st.markdown(f"""
             <div style="text-align: center; margin-bottom: 1.5rem;">
                 <h2 style="color: #666; margin-top: 5px; font-size: 1.1rem;">University Reservation System</h2>
             </div>
         """, unsafe_allow_html=True)
 
-        # GİRİŞ FORMU
-        user_type = st.radio("User Type", options=["Student", "Academician", "Admin"], horizontal=True, label_visibility="collapsed")
-        
+        # ROL SEÇİMİ (RADIO) KALDIRILDI
         st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
         
         email = st.text_input("Email Address", placeholder="email@isures.edu")
@@ -87,9 +84,9 @@ def login_page():
         if st.button("Login", use_container_width=True):
             if email and password:
                 user_found = None
-                selected_role = user_type.lower()
+                # Tüm kullanıcılar içinde e-posta ve şifre kontrolü yap
                 for user in st.session_state.users:
-                    if user["email"] == email and user["password"] == password and user["role"] == selected_role:
+                    if user["email"] == email and user["password"] == password:
                         user_found = user
                         break
                 
@@ -97,10 +94,10 @@ def login_page():
                     st.session_state.logged_in = True
                     st.session_state.user_email = user_found["email"]
                     st.session_state.user_name = user_found["name"]
-                    st.session_state.user_role = user_found["role"]
+                    st.session_state.user_role = user_found["role"] # Rol burada otomatik set ediliyor
                     st.rerun()
                 else:
-                    st.error("Invalid email, password, or user type!")
+                    st.error("Invalid email or password!") # Hata mesajı sadeleştirildi
             else:
                 st.warning("Please fill in all fields.")
 
