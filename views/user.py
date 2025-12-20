@@ -1,82 +1,89 @@
 import streamlit as st
-from datetime import datetime, date
+from datetime import date
 import utils
 
 def classrooms_page():
     st.markdown(f"<h2 style='color:{utils.PRIMARY_COLOR};'>Available Classrooms</h2>", unsafe_allow_html=True)
     
+    available_rooms = []
+    non_available_rooms = []
+
+    # 1. SINIFLARI AYIRALIM
+    for classroom in st.session_state.classrooms:
+        today_reservations = [r for r in st.session_state.reservations 
+                            if r["classroom_id"] == classroom['id'] 
+                            and r["date"] == date.today() 
+                            and r["status"].lower() in ["active", "confirmed"]]
+        
+        is_busy_today = len(today_reservations) > 0
+        is_active = classroom.get('is_active', 1) == 1 
+
+        # Sınıf objesine aktiflik bilgisini saklıyoruz ki aşağıda butonu ona göre çizelim
+        classroom['is_active_status'] = is_active # Bu satırı ekledik
+
+        if is_active and not is_busy_today:
+            available_rooms.append(classroom)
+        else:
+            classroom['reason'] = "Booked" if is_busy_today else "Maintenance / Closed"
+            non_available_rooms.append(classroom)
+
     # Modal state kontrolü
     if "selected_classroom_for_reservation" not in st.session_state:
         st.session_state.selected_classroom_for_reservation = None
     
     if st.session_state.selected_classroom_for_reservation is None:
-        # --- SINIF LİSTELEME EKRANI (Aynı Kalıyor) ---
+        # --- SINIF LİSTELEME EKRANI ---
         st.markdown(f"<p style='color:{utils.PRIMARY_COLOR}; font-weight:bold;'>Select a classroom to view available time slots</p>", unsafe_allow_html=True)
         
         # Available sınıfları
         st.subheader("Available")
-        col1, col2 = st.columns(2)
-        col_idx = 0
-        
-        for classroom in st.session_state.classrooms:
-            today_reservations = [r for r in st.session_state.reservations 
-                                 if r["classroom_id"] == classroom['id'] 
-                                 and r["date"] == date.today() 
-                                 and r["status"] == "active"]
-            
-            is_busy_today = len(today_reservations) > 0
-            
-            if not is_busy_today:
-                with col1 if col_idx % 2 == 0 else col2:
+        if available_rooms:
+            col1, col2 = st.columns(2)
+            for idx, classroom in enumerate(available_rooms):
+                with col1 if idx % 2 == 0 else col2:
                     st.markdown(f"""
                     <div style="border: 2px solid green; padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
                         <h4 style='color:{utils.PRIMARY_COLOR}; margin-top:0;'>{classroom['name']}</h4>
-                        <p style='margin: 0.3rem 0;'><strong>Building:</strong> {classroom['building']}</p>
-                        <p style='margin: 0.3rem 0;'><strong>Floor:</strong> {classroom['floor']}</p>
                         <p style='margin: 0.3rem 0;'><strong>Capacity:</strong> {classroom['capacity']} people</p>
                         <p style='margin: 0.5rem 0; color:green; font-weight:bold;'>Available</p>
                     </div>
                     """, unsafe_allow_html=True)
-                    
-                    if st.button(f"View Details", key=f"select_class_{classroom['id']}", use_container_width=True):
+                    if st.button(f"View Details", key=f"avail_{classroom['id']}", use_container_width=True):
                         st.session_state.selected_classroom_for_reservation = classroom
                         st.rerun()
-                col_idx += 1
-        
+        else:
+            st.info("No classrooms available at the moment.")
+            
         # Non-Available sınıfları
         st.subheader("Non-Available")
-        col1, col2 = st.columns(2)
-        col_idx = 0
-        
-        for classroom in st.session_state.classrooms:
-            today_reservations = [r for r in st.session_state.reservations 
-                                 if r["classroom_id"] == classroom['id'] 
-                                 and r["date"] == date.today() 
-                                 and r["status"] == "active"]
-            
-            is_busy_today = len(today_reservations) > 0
-            
-            if is_busy_today:
-                with col1 if col_idx % 2 == 0 else col2:
+        if non_available_rooms:
+            col1, col2 = st.columns(2)
+            for idx, classroom in enumerate(non_available_rooms):
+                with col1 if idx % 2 == 0 else col2:
+                    reason_text = classroom.get('reason', 'Non-Available')
+                    
+                    # Kırmızı kart tasarımı
                     st.markdown(f"""
-                    <div style="border: 2px solid red; padding: 1rem; border-radius: 10px; margin-bottom: 1rem;">
+                    <div style="border: 2px solid red; padding: 1rem; border-radius: 10px; margin-bottom: 1rem; background-color: #fff5f5;">
                         <h4 style='color:{utils.PRIMARY_COLOR}; margin-top:0;'>{classroom['name']}</h4>
-                        <p style='margin: 0.3rem 0;'><strong>Building:</strong> {classroom['building']}</p>
-                        <p style='margin: 0.3rem 0;'><strong>Floor:</strong> {classroom['floor']}</p>
                         <p style='margin: 0.3rem 0;'><strong>Capacity:</strong> {classroom['capacity']} people</p>
-                        <p style='margin: 0.5rem 0; color:red; font-weight:bold;'>Non-Available</p>
+                        <p style='margin: 0.5rem 0; color:red; font-weight:bold;'>{reason_text}</p>
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    if st.button(f"View Details", key=f"select_class_{classroom['id']}", use_container_width=True):
-                        st.session_state.selected_classroom_for_reservation = classroom
-                        st.rerun()
-                col_idx += 1
-    
+                    # KRİTİK NOKTA: Sadece sınıf aktifse (yani sadece doluysa) buton görünsün
+                    if classroom['is_active_status']:
+                        if st.button(f"View Schedule", key=f"nonavail_{classroom['id']}", use_container_width=True):
+                            st.session_state.selected_classroom_for_reservation = classroom
+                            st.rerun()
+                    else:
+                        # Sınıf pasifse buton yerine küçük bir bilgilendirme yazısı koyabiliriz
+                        st.caption("⚠️ This room is not accepting reservations.")
+            
     else:
-        # --- REZERVASYON DETAY EKRANI (Admin Kontrolü Buradadır) ---
+        # --- REZERVASYON DETAY EKRANI  ---
         selected_class = st.session_state.selected_classroom_for_reservation
-        is_admin = st.session_state.user_role == "admin" # Admin kontrolü eklendi
+        is_admin = st.session_state.user_role == "admin"
         
         col1, col2 = st.columns([4, 1])
         with col1:
@@ -88,54 +95,85 @@ def classrooms_page():
         
         st.markdown("---")
         
-        # SAAT SEÇİMİ VE GÖRÜNTÜLEME
+        # --- SAAT SEÇİMİ VE GÖRÜNTÜLEME ---
         st.markdown(f"<p style='color:{utils.PRIMARY_COLOR}; font-weight:bold;'>Select a Date and View Available Time Slots</p>", unsafe_allow_html=True)
         reservation_date = st.date_input("Select Date", value=date.today(), min_value=date.today())
-        
-        # Dolu saatleri hesapla (Eski Fonksiyonelliği Korumaktadır)
+
+        # 1. Dolu saatleri veritabanından çekiyoruz
         busy_hours = set()
-        for res in st.session_state.reservations:
-            if res["classroom_id"] == selected_class['id'] and res["date"] == reservation_date and res["status"] == "active":
-                start_hour = int(res["start_time"].split(":")[0])
-                end_hour = int(res["end_time"].split(":")[0])
+        try:
+            db = utils.get_db_connection() #
+            cursor = db.cursor(dictionary=True) #
+            
+            # Sadece aktif olan ve bu sınıfa ait rezervasyonları getir
+            # SQL tablonuzda status 'Active' veya 'Confirmed' olabilir, her ikisini de kontrol ediyoruz
+            query = """
+                SELECT start_time, end_time 
+                FROM Reservations 
+                WHERE room_id = %s 
+                AND reserv_date = %s 
+                AND status IN ('Active', 'Confirmed', 'active')
+            """
+            cursor.execute(query, (selected_class['id'], reservation_date))
+            db_reservations = cursor.fetchall()
+            
+            for res in db_reservations:
+                # SQL'den gelen time/timedelta objelerini saate çeviriyoruz
+                # Örn: 09:00:00 -> 9
+                start_time_str = str(res["start_time"])
+                end_time_str = str(res["end_time"])
+                
+                start_hour = int(start_time_str.split(":")[0])
+                end_hour = int(end_time_str.split(":")[0])
+                
                 for h in range(start_hour, end_hour):
                     busy_hours.add(f"{h:02d}:00")
-        
-        all_hours = [f"{h:02d}:00" for h in range(7, 20)]
+                    
+            cursor.close()
+            db.close()
+        except Exception as e:
+            st.error(f"Error fetching availability: {e}")
+
+        # 2. Görselleştirme Kısmı
+        all_hours = [h for h in range(7, 20)] # Sayı olarak tutuyoruz
         st.markdown(f"<p style='font-size:0.9rem; color:#666;'>Green = Available | Red = Occupied</p>", unsafe_allow_html=True)
-        
+
         hours_cols = st.columns(4)
-        for idx, hour in enumerate(all_hours):
+        for idx, h_num in enumerate(all_hours):
             col_idx = idx % 4
             with hours_cols[col_idx]:
-                is_busy = hour in busy_hours
+                hour_label = f"{h_num:02d}:00"
+                next_hour_label = f"{(h_num + 1):02d}:00"
+                
+                is_busy = hour_label in busy_hours
                 color = "red" if is_busy else "green"
-                # Admin için butonlar etkisizmiş gibi görünür
+                
+                # Sadece saati değil, aralığı yazıyoruz: "10:00 - 11:00" gibi
                 st.markdown(f"""
-                <div style="background:{color}; color:white; padding:8px; border-radius:6px; text-align:center; font-weight:bold; margin:4px 0; opacity:{'0.6' if is_busy else '1'};">
-                    {hour}
+                <div style="background:{color}; color:white; padding:8px; border-radius:6px; text-align:center; font-size:0.8rem; font-weight:bold; margin:4px 0; opacity:{'0.6' if is_busy else '1'};">
+                    {hour_label} - {next_hour_label}
                 </div>
                 """, unsafe_allow_html=True)
-        
+
         st.markdown("---")
         
         # --- REZERVASYON FORMU / ADMİN BİLGİ ALANI ---
         if not is_admin:
-            # Standart Kullanıcılar İçin Rezervasyon Formu (Mevcut haliyle korundu)
+            # Standart Kullanıcılar İçin Rezervasyon Formu
             st.markdown(f"<p style='color:{utils.PRIMARY_COLOR}; font-weight:bold;'>Make Your Reservation</p>", unsafe_allow_html=True)
             
             col1, col2 = st.columns(2)
             with col1:
                 start_hour = st.selectbox(
                     "Start Time",
-                    options=[f"{h:02d}:00" for h in range(7, 20)],
+                    options=[f"{h:02d}:00" for h in range(7, 19)],
                     key=f"start_time_{selected_class['id']}"
                 )
             
             with col2:
                 end_hour = st.selectbox(
                     "End Time",
-                    options=[f"{h:02d}:00" for h in range(7, 20)],
+                    options=[f"{h:02d}:00" for h in range(8, 20)],
                     key=f"end_time_{selected_class['id']}"
                 )
             
@@ -152,63 +190,49 @@ def classrooms_page():
             """, unsafe_allow_html=True)
             
             if st.button("Confirm Reservation", use_container_width=True, type="primary"):
-                try:
-                    start_h = int(start_hour.split(":")[0])
-                    end_h = int(end_hour.split(":")[0])
-                    
-                    if end_h <= start_h:
-                        st.error("End time must be later than start time")
-                    elif end_h - start_h > 3:
-                        st.error("Reservation duration cannot exceed 3 hours")
-                    else:
-                        conflict = False
-                        for res in st.session_state.reservations:
-                            if (res["classroom_id"] == selected_class['id'] and 
-                                res["date"] == reservation_date and 
-                                res["status"] == "active"):
-                                res_start = int(res["start_time"].split(":")[0])
-                                res_end = int(res["end_time"].split(":")[0])
-                                if not (end_h <= res_start or start_h >= res_end):
-                                    conflict = True
-                                    break
-                        
-                        if conflict:
-                            st.error("This time slot conflicts with existing reservation")
-                        else:
-                            new_reservation = {
-                                "id": len(st.session_state.reservations) + 1,
-                                "user_email": st.session_state.user_email,
-                                "user_name": st.session_state.user_name,
-                                "classroom_id": selected_class['id'],
-                                "classroom_name": selected_class['name'],
-                                "date": reservation_date,
-                                "start_time": start_hour,
-                                "end_time": end_hour,
-                                "purpose": purpose or "General use",
-                                "status": "active",
-                                "checked_in": False,
-                                "created_at": datetime.now()
-                            }
-                            st.session_state.reservations.append(new_reservation)
-                            utils.add_notification("Reservation Confirmed", f"Your reservation for {selected_class['name']} has been confirmed.")
-                            st.success("Reservation created successfully!")
-                            st.session_state.selected_classroom_for_reservation = None
-                            st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
-        else:
-            # Admin İçin Bilgilendirme Notu
-            st.info("💡 **Admin View Only:** You can see all occupancy details, but cannot create a reservation from this screen. To manage classrooms or users, please go to the **Admin Panel**.")
+                # Kullanıcının rolüne göre hangi fonksiyonun çalışacağına karar veriyoruz
+                if st.session_state.user_role == "academician":
+                    # AKADEMİSYEN: Mevcut rezervasyonu ezebilen (override) fonksiyonu çağır
+                    success, message = utils.override_reservation(
+                        academic_user_id=st.session_state.user_id,
+                        room_id=selected_class['id'],
+                        reservation_date=reservation_date,
+                        start_time_str=start_hour,
+                        end_time_str=end_hour
+                    )
+                else:
+                    # ÖĞRENCİ: Çakışma varsa hata veren normal fonksiyonu çağır
+                    success, message = utils.create_reservation(
+                        user_id=st.session_state.user_id,
+                        room_id=selected_class['id'],
+                        reservation_date=reservation_date,
+                        start_time_str=start_hour,
+                        end_time_str=end_hour
+                    )
+
+                if success:
+                    utils.add_notification(
+                        "Reservation Confirmed", 
+                        f"Your reservation for {selected_class['name']} has been confirmed."
+                    )
+                    st.success(message)
+                    st.session_state.selected_classroom_for_reservation = None
+                    st.rerun()
+                else:
+                    # Eğer bir akademisyen başka bir akademisyeni ezmeye çalışırsa 
+                    # utils.override_reservation içindeki hata mesajı burada görünür.
+                    st.error(message)
 
 def reservations_page():
     st.markdown(f"<h2 style='color:{utils.PRIMARY_COLOR};'>My Reservations</h2>", unsafe_allow_html=True)
     
+    user_reservations = utils.get_reservations_by_user(st.session_state.user_email)
+
     tab1, tab2 = st.tabs(["Active Reservations", "Past Reservations"])
     
-    user_reservations = [r for r in st.session_state.reservations if r["user_email"] == st.session_state.user_email]
     
     with tab1:
-        active = [r for r in user_reservations if r["status"] == "active" and r["date"] >= date.today()]
+        active = [r for r in user_reservations if r["status"].lower() in ["active", "confirmed"] and r["date"] >= date.today()]
         
         if active:
             for reservation in active:
@@ -220,6 +244,8 @@ def reservations_page():
                 with col1:
                     checkin_status = "Checked In" if checked_in else "Not Checked In"
                     checkin_color = "#28a745" if checked_in else "#ffc107"
+
+                    start_h = int(reservation['start_time'].split(":")[0])
                     
                     st.markdown(f"""
                     <div class="reservation-card">
@@ -228,7 +254,7 @@ def reservations_page():
                         <p><strong>Time:</strong> {reservation['start_time']} - {reservation['end_time']}</p>
                         <p><strong>Purpose:</strong> {reservation['purpose']}</p>
                         <p><strong>Check-in Status:</strong> <span style='color:{checkin_color};'>{checkin_status}</span></p>
-                        <p style='font-size:0.85rem; color:#666;'>Check-in window: {int(reservation['start_time'][:2])-1:02d}:55 - {reservation['start_time'][:2]}:15</p>
+                        <p style='font-size:0.85rem; color:#666;'>Check-in window: {start_h-1:02d}:55 - {start_h:02d}:15</p>
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -236,34 +262,32 @@ def reservations_page():
                     if not checked_in:
                         if can_do_checkin:
                             if st.button("Check In", key=f"checkin_{reservation['id']}", type="primary"):
-                                for r in st.session_state.reservations:
-                                    if r["id"] == reservation["id"]:
-                                        r["checked_in"] = True
-                                        break
+                                success, msg = utils.check_in_reservation(reservation['id'])
                                 
-                                utils.add_notification(
-                                    "Check-in Successful",
-                                    f"You have successfully checked in for {reservation['classroom_name']} at {reservation['start_time']}."
-                                )
-                                
-                                st.success("Checked in successfully!")
-                                st.rerun()
+                                if success:
+                                    utils.add_notification(
+                                        "Check-in Successful",
+                                        f"You have successfully checked in for {reservation['classroom_name']} at {reservation['start_time']}."
+                                    )
+                                    st.success(msg)
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
                         else:
                             st.info(checkin_message)
                     
                     if st.button("Cancel", key=f"cancel_{reservation['id']}"):
-                        for r in st.session_state.reservations:
-                            if r["id"] == reservation["id"]:
-                                r["status"] = "cancelled"
-                                break
+                        success, msg = utils.cancel_reservation(reservation['id'], st.session_state.user_id)
                         
-                        utils.add_notification(
-                            "Reservation Cancelled",
-                            f"Your reservation for {reservation['classroom_name']} on {reservation['date']} has been cancelled."
-                        )
-                        
-                        st.success("Reservation cancelled")
-                        st.rerun()
+                        if success:
+                            utils.add_notification(
+                                "Reservation Cancelled",
+                                f"Your reservation for {reservation['classroom_name']} on {reservation['date']} has been cancelled."
+                            )
+                            st.success(msg)
+                            st.rerun()
+                        else:
+                            st.error(msg)
         else:
             st.info("No active reservations")
     

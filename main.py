@@ -28,12 +28,11 @@ def sidebar_menu():
         
         # --- MENÜ AYARLARI GÜNCELLENDİ ---
         if user_role == "admin":
-            # ADMIN MENÜSÜ: "Reservations" buradan KALDIRILDI.
-            # Admin artık sadece Sınıfları ve Admin Panelini görür.
+
             menu_options = ["Classrooms", "Admin Panel"]
             icons = ["building", "gear"]
         else:
-            # STANDART MENÜ: Öğrenci ve Akademisyenler için hepsi açık.
+
             menu_options = ["Classrooms", "Reservations", "Notifications"]
             icons = ["building", "calendar-check", "bell"]
         
@@ -97,7 +96,6 @@ def main():
             user.classrooms_page()
             
         elif selected_page == "Reservations":
-            # Admin artık menüde bunu görmüyor
             user.reservations_page()
             
         elif selected_page == "Notifications":

@@ -8,40 +8,23 @@ def admin_panel():
     admin_tab = st.tabs(["Dashboard", "Manage Users", "Manage Classrooms", "All Reservations"])
     
     with admin_tab[0]:
-        col1, col2, col3, col4 = st.columns(4)
+
+        stats = utils.get_admin_stats()
+        
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
-            st.markdown(f"""
-            <div class="stat-card">
-                <h3>{len(st.session_state.users)}</h3>
-                <p>Total Users</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
+            st.markdown(f'<div class="stat-card"><h3>{stats["users"]}</h3><p>Total Users</p></div>', unsafe_allow_html=True)
         with col2:
-            st.markdown(f"""
-            <div class="stat-card">
-                <h3>{len(st.session_state.classrooms)}</h3>
-                <p>Classrooms</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
+            # SQL'deki toplam oda sayısı
+            st.markdown(f'<div class="stat-card"><h3>{len(st.session_state.classrooms)}</h3><p>Classrooms</p></div>', unsafe_allow_html=True)
         with col3:
-            st.markdown(f"""
-            <div class="stat-card">
-                <h3>{len(st.session_state.reservations)}</h3>
-                <p>Total Reservations</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
+            st.markdown(f'<div class="stat-card"><h3>{stats["today_res"]}</h3><p>Today\'s Res.</p></div>', unsafe_allow_html=True)
         with col4:
-            active_count = len([r for r in st.session_state.reservations if r["status"] == "active"])
-            st.markdown(f"""
-            <div class="stat-card">
-                <h3>{active_count}</h3>
-                <p>Active Reservations</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(f'<div class="stat-card"><h3>{stats["noshow"]}</h3><p>No-Shows</p></div>', unsafe_allow_html=True)
+        with col5:
+            # En çok kullanılan sınıfı gösteren kart
+            st.markdown(f'<div class="stat-card"><h3>★</h3><p>Most Popular:<br><b>{stats["popular_room"]}</b></p></div>', unsafe_allow_html=True)
     
     # --- MANAGE USERS ---
     with admin_tab[1]:
@@ -65,10 +48,13 @@ def admin_panel():
                             st.session_state.editing_user_email = user['email']
                             st.rerun()
                 with col4:
-                    if user["role"] != "admin":
-                        if st.button("Delete", key=f"del_user_{user['email']}", use_container_width=True):
-                            st.session_state.users = [u for u in st.session_state.users if u["email"] != user["email"]]
+                    if st.button("Delete", key=f"del_user_{user['email']}", use_container_width=True):
+                        success, msg = utils.delete_user(user['email'])
+                        if success:
+                            st.success(msg)
                             st.rerun()
+                        else:
+                            st.error(msg)
         else:
             # GÜNCELLEME EKRANI
             editing_user = next((u for u in st.session_state.users if u['email'] == st.session_state.editing_user_email), None)
@@ -90,15 +76,18 @@ def admin_panel():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Save Changes", use_container_width=True, type="primary"):
-                    for u in st.session_state.users:
-                        if u['email'] == st.session_state.editing_user_email:
-                            u['name'] = updated_name
-                            u['password'] = updated_password
-                            u['role'] = updated_role
-                            break
-                    st.success("User updated successfully!")
-                    st.session_state.editing_user_email = None
-                    st.rerun()
+                    success, msg = utils.update_user_profile(
+                        st.session_state.editing_user_email, 
+                        updated_name, 
+                        updated_password, 
+                        updated_role
+                    )
+                    if success:
+                        st.success(msg)
+                        st.session_state.editing_user_email = None
+                        st.rerun()
+                    else:
+                        st.error(msg)
             
             with col2:
                 if st.button("Cancel", use_container_width=True):
@@ -116,18 +105,13 @@ def admin_panel():
             
             if st.form_submit_button("Add User"):
                 if new_email and new_name and new_password:
-                    existing = [u for u in st.session_state.users if u["email"] == new_email]
-                    if existing:
-                        st.error("Email already exists")
-                    else:
-                        st.session_state.users.append({
-                            "email": new_email,
-                            "name": new_name,
-                            "password": new_password,
-                            "role": new_role
-                        })
-                        st.success("User added successfully!")
+                    success, msg = utils.add_user_to_db(new_email, new_name, new_password, new_role)
+                    if success:
+                        st.success(msg)
+                        # init_session_state verileri tazeleyeceği için listeye otomatik yansır
                         st.rerun()
+                    else:
+                        st.error(msg)
                 else:
                     st.warning("Please fill all fields")
     
@@ -154,8 +138,12 @@ def admin_panel():
                         st.rerun()
                 with col4:
                     if st.button("Delete", key=f"del_class_{classroom['id']}", use_container_width=True):
-                        st.session_state.classrooms = [c for c in st.session_state.classrooms if c["id"] != classroom["id"]]
-                        st.rerun()
+                        success, msg = utils.delete_classroom(classroom['id'])
+                        if success:
+                            st.success(msg)
+                            st.rerun()
+                        else:
+                            st.error(msg)
         else:
             # GÜNCELLEME EKRANI
             editing_class = next((c for c in st.session_state.classrooms if c['id'] == st.session_state.editing_class_id), None)
@@ -185,17 +173,18 @@ def admin_panel():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("Save Changes", use_container_width=True, type="primary"):
-                    for c in st.session_state.classrooms:
-                        if c['id'] == st.session_state.editing_class_id:
-                            c['name'] = updated_name
-                            c['building'] = updated_building
-                            c['floor'] = updated_floor
-                            c['capacity'] = updated_capacity
-                            c['is_active'] = updated_is_active
-                            break
-                    st.success("Classroom updated successfully!")
-                    st.session_state.editing_class_id = None
-                    st.rerun()
+                    success, msg = utils.update_classroom_details(
+                        st.session_state.editing_class_id,
+                        updated_name,
+                        updated_capacity,
+                        updated_is_active
+                    )
+                    if success:
+                        st.success(msg)
+                        st.session_state.editing_class_id = None
+                        st.rerun()
+                    else:
+                        st.error(msg)
             
             with col2:
                 if st.button("Cancel", use_container_width=True):
@@ -211,19 +200,20 @@ def admin_panel():
             class_floor = st.text_input("Floor")
             class_capacity = st.number_input("Capacity", min_value=1, value=30)
             
+            
             if st.form_submit_button("Add Classroom"):
-                if class_name and class_building:
-                    new_id = max([c["id"] for c in st.session_state.classrooms], default=0) + 1
-                    st.session_state.classrooms.append({
-                        "id": new_id,
-                        "name": class_name,
-                        "building": class_building,
-                        "floor": class_floor,
-                        "capacity": class_capacity,
-                        "is_active": True
-                    })
-                    st.success("Classroom added successfully!")
-                    st.rerun()
+                if class_name:
+                    success, msg = utils.add_new_room(
+                        room_name=class_name, 
+                        capacity=class_capacity, 
+                        features=f"{class_building}, {class_floor}"
+                    )
+                    
+                    if success:
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.error(msg)
                 else:
                     st.warning("Please fill required fields")
     
@@ -232,15 +222,16 @@ def admin_panel():
         st.subheader("All Reservations")
         
         status_filter = st.selectbox("Filter by Status", ["All", "Active", "Cancelled", "Past"])
-        
-        filtered = st.session_state.reservations
+    
+        all_res = utils.get_all_reservations()
+        filtered = all_res
         
         if status_filter == "Active":
-            filtered = [r for r in filtered if r["status"] == "active" and r["date"] >= date.today()]
+            filtered = [r for r in all_res if r["status"].lower() in ["active", "confirmed"] and r["date"] >= date.today()]
         elif status_filter == "Cancelled":
-            filtered = [r for r in filtered if r["status"] == "cancelled"]
+            filtered = [r for r in all_res if r["status"].lower() == "cancelled"]
         elif status_filter == "Past":
-            filtered = [r for r in filtered if (r["status"] == "completed" or r.get("checked_in", False)) and r["date"] < date.today()]
+            filtered = [r for r in all_res if r["date"] < date.today()]
         
         if filtered:
             for reservation in filtered:
